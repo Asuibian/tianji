@@ -1,8 +1,13 @@
 package com.tianji.learning.service.impl;
 
+import cn.hutool.core.collection.CollUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.tianji.api.client.course.CatalogueClient;
 import com.tianji.api.client.course.CourseClient;
+import com.tianji.api.dto.IdAndNumDTO;
 import com.tianji.api.dto.course.CataSimpleInfoDTO;
 import com.tianji.api.dto.course.CourseFullInfoDTO;
 import com.tianji.api.dto.course.CourseSimpleInfoDTO;
@@ -12,25 +17,28 @@ import com.tianji.common.domain.query.PageQuery;
 import com.tianji.common.exceptions.BadRequestException;
 import com.tianji.common.exceptions.BizIllegalException;
 import com.tianji.common.utils.CollUtils;
+import com.tianji.common.utils.DateUtils;
 import com.tianji.common.utils.UserContext;
 import com.tianji.learning.domain.po.LearningLesson;
+import com.tianji.learning.domain.po.LearningRecord;
 import com.tianji.learning.domain.vo.LearningLessonVO;
 import com.tianji.learning.domain.vo.LearningNowVO;
+import com.tianji.learning.domain.vo.LearningPlanPageVO;
+import com.tianji.learning.domain.vo.LearningPlanVO;
 import com.tianji.learning.enums.LessonStatus;
+import com.tianji.learning.enums.PlanStatus;
 import com.tianji.learning.mapper.LearningLessonMapper;
+import com.tianji.learning.mapper.LearningRecordMapper;
 import com.tianji.learning.service.ILearningLessonService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -50,13 +58,15 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
 
     private final CatalogueClient catalogueClient;
 
+    private final LearningRecordMapper learningRecordMapper;
+
     @Override
     @Transactional
     public void addUserLessons(Long userId, List<Long> courseIds) {
         // 1、需要以下字段数据  学员id 课程id 创建时间  过期时间
         //1.1查询课程过期时间
         List<CourseSimpleInfoDTO> cInfoList = courseClient.getSimpleInfoList(courseIds);
-        if(CollUtils.isEmpty(cInfoList)){
+        if (CollUtils.isEmpty(cInfoList)) {
             log.error("课程id查询不到课程信息，无法添加到课表中");
             return;
         }
@@ -70,7 +80,7 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
             learningLesson.setCreateTime(now);
 
             Integer validDuration = cInfo.getValidDuration();
-            if(validDuration != null && validDuration > 0){
+            if (validDuration != null && validDuration > 0) {
                 learningLesson.setExpireTime(now.plusMonths(validDuration));
             }
 
@@ -85,6 +95,7 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
 
     /**
      * 分页查询我的课表
+     *
      * @param query
      * @return
      */
@@ -95,9 +106,9 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
         // 2、分页查询
         Page<LearningLesson> page = lambdaQuery()
                 .eq(LearningLesson::getUserId, userId)
-                .page(query.toMpPage("latest_learn_time",false));
+                .page(query.toMpPage("latest_learn_time", false));
         List<LearningLesson> records = page.getRecords();
-        if(CollUtils.isEmpty(records)){
+        if (CollUtils.isEmpty(records)) {
             return PageDTO.empty(page);
         }
         // 3、获取课程信息
@@ -113,8 +124,8 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
 
         // 3.2查询课程信息
         List<CourseSimpleInfoDTO> cInfoList = courseClient.getSimpleInfoList(cIds);
-        if(CollUtils.isEmpty(cInfoList)){
-           throw new BadRequestException("课程信息不存在");
+        if (CollUtils.isEmpty(cInfoList)) {
+            throw new BadRequestException("课程信息不存在");
         }
 
         // 3.3把课程集合处理成Map，key是课程id，值是本身
@@ -125,7 +136,7 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
         for (LearningLesson r : records) {
             // 属性拷贝
             LearningLessonVO vo = new LearningLessonVO();
-            BeanUtils.copyProperties(r,vo);
+            BeanUtils.copyProperties(r, vo);
 
             // 课程信息对应，r里面已经属性拷贝了课程id，
             CourseSimpleInfoDTO cInfo = cInfoMap.get(r.getCourseId());
@@ -136,7 +147,7 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
             list.add(vo);
         }
         // 总条数，总页数，集合
-        return new PageDTO<>(page.getTotal(),page.getPages(),list);
+        return new PageDTO<>(page.getTotal(), page.getPages(), list);
     }
 
     @Override
@@ -148,12 +159,12 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
         //查询当前用户最近学习的课程
         //根据需要查询的表的PO去查询
         LearningLesson lesson = this.lambdaQuery()
-                .eq(LearningLesson::getUserId,userId)
+                .eq(LearningLesson::getUserId, userId)
                 .eq(LearningLesson::getStatus, LessonStatus.LEARNING)
                 .orderByDesc(LearningLesson::getLatestLearnTime)
                 .last("limit 1") //限制只返回一条数据
                 .one();
-        if(lesson == null){
+        if (lesson == null) {
             return null;
         }
 
@@ -166,17 +177,17 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
 
         // 获取用户学习的总课程数量
         Integer count = this.lambdaQuery()
-                .eq(LearningLesson::getUserId,userId)
+                .eq(LearningLesson::getUserId, userId)
                 .count();
 
         // 根据小节ID查询目录详细信息
         Long latestSectionId = lesson.getLatestSectionId();
         List<CataSimpleInfoDTO> cataSimpleInfoDTOS = catalogueClient.batchQueryCatalogue(CollUtils.singletonList(latestSectionId));
-        if (cataSimpleInfoDTOS == null){
+        if (cataSimpleInfoDTOS == null) {
             throw new BizIllegalException("小节不存在");
         }
 
-        BeanUtils.copyProperties(lesson,vo);
+        BeanUtils.copyProperties(lesson, vo);
         vo.setCourseName(cinfo.getName());
         vo.setCourseCoverUrl(cinfo.getCoverUrl());
         vo.setSections(cinfo.getSectionNum());
@@ -189,21 +200,20 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
     }
 
 
-
     public LearningLessonVO queryCourseLearningStatus(Long courseId) {
         Long userId = UserContext.getUser();
         // 得到课程学习状态，已经学习课时数，加入课表时间，过期时间
         LearningLesson lesson = this.lambdaQuery()
-                .eq(LearningLesson::getUserId,userId)
-                .eq(LearningLesson::getCourseId,courseId)
+                .eq(LearningLesson::getUserId, userId)
+                .eq(LearningLesson::getCourseId, courseId)
                 .one();
-        if(lesson == null){
+        if (lesson == null) {
             return null;
         }
 
 
         LearningLessonVO vo = new LearningLessonVO();
-        BeanUtils.copyProperties(lesson,vo);
+        BeanUtils.copyProperties(lesson, vo);
 
         return vo;
     }
@@ -212,16 +222,16 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
     public void deleteLearningLesson(Long courseId) {
         Long userId = UserContext.getUser();
         this.lambdaUpdate()
-                .eq(LearningLesson::getUserId,userId)
-                .eq(LearningLesson::getCourseId,courseId)
+                .eq(LearningLesson::getUserId, userId)
+                .eq(LearningLesson::getCourseId, courseId)
                 .remove();
     }
 
 
     public void deleteRefundLearningLesson(OrderBasicDTO order) {
         this.lambdaUpdate()
-                .in(LearningLesson::getCourseId,order.getCourseIds())
-                .eq(LearningLesson::getUserId,order.getUserId())
+                .in(LearningLesson::getCourseId, order.getCourseIds())
+                .eq(LearningLesson::getUserId, order.getUserId())
                 .remove();
     }
 
@@ -238,8 +248,8 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
         //用户是否报名
         Long userId = UserContext.getUser();
         LearningLesson vo = this.lambdaQuery()
-                .eq(LearningLesson::getUserId,userId)
-                .eq(LearningLesson::getCourseId,courseId)
+                .eq(LearningLesson::getUserId, userId)
+                .eq(LearningLesson::getCourseId, courseId)
                 .one();
         // 没有报名
         if (vo == null) {
@@ -248,10 +258,123 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
 
         //用户课程是否过期
         LocalDateTime expireTime = vo.getExpireTime();
-        if(expireTime != null && LocalDateTime.now().isAfter(expireTime)){
+        if (expireTime != null && LocalDateTime.now().isAfter(expireTime)) {
             return null;
         }
         return vo.getId();
+    }
+
+    @Override
+    public LearningLesson queryLessonIdByUserIdCouresId(Long userId, Long courseId) {
+        return this.lambdaQuery()
+                .eq(LearningLesson::getUserId, userId)
+                .eq(LearningLesson::getCourseId, courseId)
+                .one();
+    }
+
+    @Override
+    public void createLearningPlans(Integer freq, Long courseId) {
+        // 获取用户id
+        Long userId = UserContext.getUser();
+        // sql查询课表
+        LearningLesson lesson = this.lambdaQuery()
+                .eq(LearningLesson::getUserId, userId)
+                .eq(LearningLesson::getCourseId, courseId)
+                .one();
+        if (lesson == null) {
+            throw new BizIllegalException("课程信息不存在!");
+        }
+        // 修改，是否需要更新状态
+        LearningLesson learningLesson = new LearningLesson();
+        learningLesson.setId(lesson.getId());
+        learningLesson.setWeekFreq(freq);
+        if (lesson.getPlanStatus() == PlanStatus.NO_PLAN) {
+            learningLesson.setPlanStatus(PlanStatus.PLAN_RUNNING);
+        }
+        updateById(learningLesson);
+
+    }
+
+    @Override
+    public LearningPlanPageVO queryMyPlans(PageQuery query) {
+        LearningPlanPageVO pageVO = new LearningPlanPageVO();
+        // 1.获取当前登录用户
+        Long userId = UserContext.getUser();
+        // 2.获取本周起始时间
+        LocalDate now = LocalDate.now();
+        LocalDateTime beginTime = DateUtils.getWeekBeginTime(now);
+        LocalDateTime endTime = DateUtils.getWeekEndTime(now);
+        // 3.查询总的统计数据
+        // 3.1本周总的已学习小节数量
+        Integer weekFinished = learningRecordMapper.selectCount(new LambdaQueryWrapper<LearningRecord>()
+                .eq(LearningRecord::getUserId, userId)
+                .eq(LearningRecord::getFinished, true)
+                .gt(LearningRecord::getFinishTime, beginTime)
+                .lt(LearningRecord::getFinishTime, endTime)
+        );
+        pageVO.setWeekFinished(weekFinished);
+        // 3.2本周总的计划学习小节数量
+        Integer weekTotalPlan = getBaseMapper().queryTotalPlan(userId);
+        pageVO.setWeekTotalPlan(weekTotalPlan);
+        // TODO 3.3本周学习积分
+
+        // 4.查询分页数据
+        // 4.1分页查询课表信息以及学习计划信息
+        Page<LearningLesson> page1 = new Page<>(query.getPageNo(), query.getPageSize());
+        OrderItem orderItem = new OrderItem();
+        orderItem.setAsc(false);
+        orderItem.setColumn("latest_learn_time"); // MySQL不认识驼峰
+        page1.addOrder(orderItem);
+
+
+        Page<LearningLesson> p = lambdaQuery()
+                .eq(LearningLesson::getUserId, userId)
+                .eq(LearningLesson::getPlanStatus, PlanStatus.PLAN_RUNNING)
+                .in(LearningLesson::getStatus, LessonStatus.NOT_BEGIN, LessonStatus.LEARNING)
+                .page(page1);
+        List<LearningLesson> records = p.getRecords();
+
+        if (CollUtil.isEmpty(records)) {
+            long total = p.getTotal();
+            long pages = p.getPages();
+            pageVO.setTotal(total);
+            pageVO.setPages(pages);
+            pageVO.setList(Collections.emptyList());
+
+            return pageVO;
+        }
+        // 4.2查询课表对应的课程信息
+        // 需要集合中的一个属性，只需要，去重
+        Set<Long> cIds = records.stream().map(LearningLesson::getCourseId).collect(Collectors.toSet());
+
+        List<CourseSimpleInfoDTO> cInfoList = courseClient.getSimpleInfoList(cIds);
+
+        Map<Long, CourseSimpleInfoDTO> cInfoMap = cInfoList.stream().collect(Collectors.toMap(CourseSimpleInfoDTO::getId, c -> c));
+        // 4.3 统计每一个课程本周已学习小节数量
+        List<IdAndNumDTO> list = learningRecordMapper.countLearningSections(userId, beginTime, endTime);
+
+        Map<Long, Integer> countMap = list.stream().collect(Collectors.toMap(IdAndNumDTO::getId, IdAndNumDTO::getNum));
+
+        // 4.4封装VO
+        List<LearningPlanVO> voList = new ArrayList<>();
+        for (LearningLesson l : records) {
+            LearningPlanVO vo = new LearningPlanVO();
+            BeanUtils.copyProperties(l, vo);
+
+            CourseSimpleInfoDTO courseSimpleInfoDTO = cInfoMap.get(l.getCourseId());
+            if (courseSimpleInfoDTO != null) {
+                vo.setCourseName(courseSimpleInfoDTO.getName());
+                vo.setSections(courseSimpleInfoDTO.getSectionNum());
+            }
+
+            Integer orDefault = countMap.getOrDefault(l.getId(), 0);
+            vo.setWeekLearnedSections(orDefault);
+            voList.add(vo);
+        }
+        pageVO.setTotal(p.getTotal());
+        pageVO.setPages(p.getPages());
+        pageVO.setList(voList);
+        return pageVO;
     }
 }
 
