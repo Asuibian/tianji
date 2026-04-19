@@ -11,7 +11,7 @@ import java.util.List;
 public interface CatalogueClient {
 
     /**
-     * 根据目录id列表查询目录信息
+     * 根据目录id 列表 查询 目录信息
      *
      * @param ids 目录id列表
      * @return id列表中对应的目录基础信息
