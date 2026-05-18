@@ -3,6 +3,7 @@ package com.tianji.authsdk.resource.config;
 import cn.hutool.core.collection.CollUtil;
 import com.tianji.authsdk.resource.interceptors.LoginAuthInterceptor;
 import com.tianji.authsdk.resource.interceptors.UserInfoInterceptor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
