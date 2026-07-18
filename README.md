@@ -353,16 +353,6 @@ MySQL分库分表保存
 实现统一分布式锁组件。
 
 
-使用方式：
-
-```java
-@DistributedLock(
-    name="coupon"
-)
-public void receiveCoupon(){
-
-}
-```
 
 
 降低业务代码侵入。
