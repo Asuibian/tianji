@@ -1,11 +1,11 @@
 # 我主要负责的代码集中在：
 
-- [学习服务：tj-learning](#学习服务tj-learning)
-- [积分服务：tj-points](#积分服务tj-points)
-- [营销服务：tj-promotion](#营销服务tj-promotion)
+- [学习服务：tj-learning](#learning)
+- [积分服务：tj-points](#points)
+- [营销服务：tj-promotion](#promotion)
 
 
----
+<a id="learning"></a>
 
 ## 学习服务：tj-learning
 
@@ -14,7 +14,7 @@
 Redis缓存播放进度、DelayQueue延迟批量写入MySQL的逻辑主要在这个模块。
 
 
----
+<a id="points"></a>
 
 ## 积分服务：tj-points
 
@@ -23,7 +23,7 @@ Redis缓存播放进度、DelayQueue延迟批量写入MySQL的逻辑主要在这
 Redis Bitmap签到、Redis ZSet排行榜相关代码在这里。
 
 
----
+<a id="promotion"></a>
 
 ## 营销服务：tj-promotion
 
