@@ -1,4 +1,4 @@
-只要把优惠券领取功能实现字体显眼一点。我主要负责的代码集中在：
+我主要负责的代码集中在：
 
 [断点续播功能实现](https://github.com/Asuibian/tianji/blob/dev/tj-learning/src/main/java/com/tianji/learning/service/impl/LearningRecordServiceImpl.java)
 
