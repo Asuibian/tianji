@@ -10,7 +10,7 @@
 
 [优惠券发放的实现](https://github.com/Asuibian/tianji/blob/dev/tj-promotion/src/main/java/com/tianji/promotion/service/impl/ExchangeCodeServiceImpl.java)
 
-## ⭐ **优惠券领取功能实现（重点负责）**
-# [优惠券领取的实现](https://github.com/Asuibian/tianji/blob/dev/tj-promotion/src/main/java/com/tianji/promotion/service/impl/UserCouponServiceImpl.java)
+
+ ### [优惠券领取的实现](https://github.com/Asuibian/tianji/blob/dev/tj-promotion/src/main/java/com/tianji/promotion/service/impl/UserCouponServiceImpl.java)
 
 [优惠券查询的实现](https://github.com/Asuibian/tianji/blob/dev/tj-promotion/src/main/java/com/tianji/promotion/service/impl/DiscountServiceImpl.java)
